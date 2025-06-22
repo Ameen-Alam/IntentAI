@@ -1,6 +1,7 @@
 """Enhanced tool detection with parameter extraction and validation."""
 
 import re
+import difflib
 from typing import Any, Dict, List, Optional, Tuple
 from pydantic import BaseModel, create_model
 from pydantic_core import PydanticUndefined
@@ -8,45 +9,200 @@ from pydantic_core import PydanticUndefined
 from .types import DetectionResult, Tool, ToolParameter, ParameterType
 
 
+def _normalize(text):
+    """Normalize text for comparison by removing punctuation and extra spaces."""
+    # Handle contractions
+    text = re.sub(r"what's", "what is", text, flags=re.IGNORECASE)
+    text = re.sub(r"it's", "it is", text, flags=re.IGNORECASE)
+    text = re.sub(r"that's", "that is", text, flags=re.IGNORECASE)
+    return ' '.join(re.sub(r'[^a-zA-Z0-9 ]', '', text.lower()).split())
+
+def _fuzzy_trigger_match(input_text, trigger_phrases, threshold=0.7):
+    """Generic fuzzy matching for trigger phrases with improved flexibility."""
+    input_norm = _normalize(input_text)
+    best = None
+    best_score = 0
+    
+    for phrase in trigger_phrases:
+        phrase_norm = _normalize(phrase)
+        if phrase_norm in input_norm:
+            return phrase, 1.0
+        # Fuzzy match using sequence matcher
+        score = difflib.SequenceMatcher(None, phrase_norm, input_norm).ratio()
+        if score > best_score:
+            best = phrase
+            best_score = score
+    
+    if best_score >= threshold:
+        return best, best_score
+    return None, 0
+
+
 def calculate_confidence(
     tool: Tool,
     user_input: str,
     extracted_params: Dict[str, Any]
 ) -> float:
-    """Calculate confidence score for tool detection."""
+    """Calculate confidence score for tool detection - completely generic."""
     confidence = 0.0
-    input_lower = user_input.lower()
+    input_norm = _normalize(user_input)
     
-    # Check if any trigger phrase is present (more lenient matching)
-    for phrase in tool.trigger_phrases:
-        phrase_lower = phrase.lower()
-        if phrase_lower in input_lower:
-            confidence += 0.4  # Base confidence for trigger phrase match
-            # Additional confidence for exact matches
-            if phrase_lower == input_lower.strip():
-                confidence += 0.2
-            break
+    # Trigger phrase matching
+    matched_trigger, trigger_score = _fuzzy_trigger_match(user_input, tool.trigger_phrases)
+    if trigger_score > 0.7:
+        confidence += 0.4 * trigger_score
+        if matched_trigger and _normalize(matched_trigger) == input_norm:
+            confidence += 0.2
     
-    # Check parameter extraction
+    # Parameter extraction quality
     param_count = len(extracted_params)
     required_params = sum(1 for p in tool.parameters if p.required)
     if required_params > 0:
-        # Higher weight for required parameters
         confidence += 0.4 * (param_count / required_params)
     
-    # Check if input matches any example (more lenient matching)
+    # Example matching
     for example in tool.examples:
-        example_lower = example.lower()
-        if example_lower in input_lower or input_lower in example_lower:
+        example_norm = _normalize(example)
+        if example_norm in input_norm or input_norm in example_norm:
             confidence += 0.2
             break
     
-    # Penalize if required parameters are missing
+    # Penalty for missing required parameters
     missing_required = sum(1 for p in tool.parameters if p.required and p.name not in extracted_params)
     if missing_required > 0:
-        confidence *= 0.5  # Significant penalty for missing required parameters
+        confidence *= 0.5
     
     return min(confidence, 1.0)
+
+
+def _extract_boolean_parameter(param: ToolParameter, full_input: str) -> Optional[bool]:
+    """Extract boolean parameters with improved pattern matching."""
+    param_name_lower = param.name.lower()
+    input_lower = full_input.lower()
+    
+    # Common boolean patterns
+    positive_patterns = [
+        rf'with\s+{re.escape(param_name_lower)}',
+        rf'including\s+{re.escape(param_name_lower)}',
+        rf'show\s+{re.escape(param_name_lower)}',
+        rf'include\s+{re.escape(param_name_lower)}',
+        rf'with\s+{re.escape(param_name_lower)}\s+enabled',
+        rf'with\s+{re.escape(param_name_lower)}\s+on'
+    ]
+    
+    negative_patterns = [
+        rf'without\s+{re.escape(param_name_lower)}',
+        rf'no\s+{re.escape(param_name_lower)}',
+        rf'exclude\s+{re.escape(param_name_lower)}',
+        rf'without\s+{re.escape(param_name_lower)}\s+enabled',
+        rf'without\s+{re.escape(param_name_lower)}\s+on'
+    ]
+    
+    for pattern in positive_patterns:
+        if re.search(pattern, input_lower):
+            return True
+    
+    for pattern in negative_patterns:
+        if re.search(pattern, input_lower):
+            return False
+    
+    return None
+
+
+def _extract_string_parameter(param: ToolParameter, remaining_text: str, full_input: str) -> Optional[str]:
+    """Extract string parameters with improved text parsing."""
+    param_name_lower = param.name.lower()
+    input_lower = full_input.lower()
+    
+    # Try to find parameter name followed by value
+    param_pattern = rf'{re.escape(param_name_lower)}\s+([^\s,;]+)'
+    match = re.search(param_pattern, input_lower)
+    if match:
+        return match.group(1)
+    
+    # For specific parameter types, use specialized extraction
+    if param_name_lower == 'expression':
+        # Remove common calculator words
+        expression_text = remaining_text
+        for word in ['calculate', 'what is', 'compute', 'solve', 'whats']:
+            expression_text = re.sub(rf'\b{word}\b', '', expression_text, flags=re.IGNORECASE)
+        return expression_text.strip()
+    
+    elif param_name_lower == 'query':
+        # Clean up query text
+        query_text = remaining_text
+        # Remove common search words
+        for word in ['search for', 'find', 'look for', 'search', 'find information about']:
+            query_text = re.sub(rf'\b{word}\b', '', query_text, flags=re.IGNORECASE)
+        return query_text.strip()
+    
+    elif param_name_lower == 'symbol':
+        # Extract stock symbol - look for uppercase letters or common patterns
+        # First try to find after 'of' or 'for'
+        symbol_match = re.search(r'(?:of|for)\s+([A-Za-z0-9]+)', input_lower)
+        if symbol_match:
+            return symbol_match.group(1).upper()
+        
+        # Look for uppercase stock symbols
+        symbol_matches = re.findall(r'\b[A-Z]{1,5}\b', full_input)
+        if symbol_matches:
+            return symbol_matches[0]
+        
+        # Fallback: last word that looks like a symbol
+        words = re.findall(r'\b[a-zA-Z0-9]{1,5}\b', full_input)
+        if words:
+            return words[-1].upper()
+    
+    elif param_name_lower == 'city':
+        # Extract city name - look for patterns like "in [City]" or "for [City]"
+        city_patterns = [
+            r'(?:in|for|at)\s+([A-Za-z\s,]+?)(?:\s+(?:in|with|and|,|$))',
+            r'(?:in|for|at)\s+([A-Za-z\s,]+?)(?:\s+(?:celsius|fahrenheit|kelvin|$))',
+            r'(?:in|for|at)\s+([A-Za-z\s,]+?)$'
+        ]
+        
+        for pattern in city_patterns:
+            match = re.search(pattern, input_lower)
+            if match:
+                city = match.group(1).strip()
+                # Clean up the city name
+                city = re.sub(r'\s+(?:in|with|and|,).*$', '', city, flags=re.IGNORECASE)
+                if city and len(city) > 1:
+                    return city.title()
+    
+    elif param_name_lower == 'units':
+        # Extract units from anywhere in the input
+        if 'fahrenheit' in input_lower:
+            return 'fahrenheit'
+        elif 'celsius' in input_lower:
+            return 'celsius'
+        elif 'kelvin' in input_lower:
+            return 'kelvin'
+    
+    # Default: use remaining text if available
+    if remaining_text.strip():
+        return remaining_text.strip()
+    
+    return None
+
+
+def _extract_generic_parameter(param: ToolParameter, remaining_text: str, full_input: str) -> Any:
+    """Generic parameter extraction based only on parameter type and name."""
+    if param.type == ParameterType.NUMBER:
+        # Look for numbers in the remaining text
+        numbers = re.findall(r'\d+(?:\.\d+)?', remaining_text)
+        if numbers:
+            return float(numbers[0])
+    
+    elif param.type == ParameterType.BOOLEAN:
+        # Use improved boolean extraction
+        return _extract_boolean_parameter(param, full_input)
+    
+    elif param.type == ParameterType.STRING:
+        # Use improved string extraction
+        return _extract_string_parameter(param, remaining_text, full_input)
+    
+    return None
 
 
 def extract_parameters(
@@ -54,62 +210,28 @@ def extract_parameters(
     tool: Tool,
     context: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    """Extract parameters from user input."""
+    """Extract parameters from user input - completely generic approach."""
     params = {}
     input_lower = user_input.lower()
     
-    # Find the longest matching trigger phrase
-    best_trigger = None
-    best_trigger_len = 0
-    for phrase in tool.trigger_phrases:
-        phrase_lower = phrase.lower()
-        if phrase_lower in input_lower and len(phrase_lower) > best_trigger_len:
-            best_trigger = phrase_lower
-            best_trigger_len = len(phrase_lower)
+    # Find the best matching trigger phrase
+    matched_trigger, trigger_score = _fuzzy_trigger_match(user_input, tool.trigger_phrases)
     
-    if best_trigger:
-        # Extract the part after the trigger phrase
-        trigger_index = input_lower.find(best_trigger) + len(best_trigger)
+    if matched_trigger:
+        # Extract text after the trigger phrase
+        trigger_index = input_lower.find(matched_trigger.lower())
+        if trigger_index != -1:
+            trigger_index += len(matched_trigger)
+        else:
+            trigger_index = 0
+        
         remaining_text = user_input[trigger_index:].strip()
         
-        # Extract parameters based on their types and names
+        # Extract parameters using generic logic
         for param in tool.parameters:
-            param_name_lower = param.name.lower()
-            
-            # Look for parameter name in the text
-            param_index = remaining_text.lower().find(param_name_lower)
-            
-            if param.type == ParameterType.NUMBER:
-                # Look for numbers in the remaining text
-                numbers = re.findall(r'\d+', remaining_text)
-                if numbers:
-                    params[param.name] = float(numbers[0])
-            elif param.type == ParameterType.BOOLEAN:
-                # Look for boolean indicators
-                if 'with' in remaining_text.lower() and param_name_lower in remaining_text.lower():
-                    params[param.name] = True
-                elif 'without' in remaining_text.lower() and param_name_lower in remaining_text.lower():
-                    params[param.name] = False
-            elif param.type == ParameterType.STRING:
-                # For string parameters, try to extract based on context
-                if param_name_lower == 'city':
-                    # Special handling for city parameter
-                    city_text = remaining_text
-                    for unit in ['celsius', 'fahrenheit', 'kelvin']:
-                        city_text = city_text.replace(unit, '').strip()
-                    if 'in' in city_text.lower():
-                        city_text = city_text.split('in')[-1].strip()
-                    params[param.name] = city_text
-                elif param_name_lower == 'query':
-                    # For query parameters, use the remaining text
-                    params[param.name] = remaining_text
-                elif param_index != -1:
-                    # For other string parameters, try to extract after the parameter name
-                    value = remaining_text[param_index + len(param_name_lower):].strip()
-                    if value:
-                        # Remove any trailing punctuation or common words
-                        value = re.sub(r'[.,;:!?].*$', '', value).strip()
-                        params[param.name] = value
+            extracted_value = _extract_generic_parameter(param, remaining_text, user_input)
+            if extracted_value is not None:
+                params[param.name] = extracted_value
     
     # Apply default values for missing parameters
     for param in tool.parameters:
@@ -122,35 +244,29 @@ def extract_parameters(
 def detect_tool_and_params(
     user_input: str,
     available_tools: List[Tool],
-    min_confidence: float = 0.6,  # Lowered minimum confidence threshold
+    min_confidence: float = 0.6,
     context: Optional[Dict[str, Any]] = None
 ) -> Optional[DetectionResult]:
-    """Detect which tool to use and extract its parameters from user input."""
+    """Detect which tool to use and extract its parameters - completely generic."""
     best_match = None
     best_confidence = 0.0
     best_params = {}
     validation_errors = []
     missing_params = []
     
-    # First check if any tool's trigger phrases match the input
-    input_lower = user_input.lower()
+    # Find tools that match the input
     matching_tools = []
     for tool in available_tools:
-        for phrase in tool.trigger_phrases:
-            if phrase.lower() in input_lower:
-                matching_tools.append(tool)
-                break
+        matched_trigger, trigger_score = _fuzzy_trigger_match(user_input, tool.trigger_phrases)
+        if trigger_score > 0.7:
+            matching_tools.append(tool)
     
-    # If no tools match, return None immediately
     if not matching_tools:
         return None
     
-    # Only process matching tools
+    # Evaluate each matching tool
     for tool in matching_tools:
-        # Extract parameters
         params = extract_parameters(user_input, tool, context)
-        
-        # Calculate confidence
         confidence = calculate_confidence(tool, user_input, params)
         
         if confidence > best_confidence:

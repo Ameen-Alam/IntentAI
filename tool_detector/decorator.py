@@ -27,7 +27,7 @@ def _get_parameter_type(param_type: Type) -> ParameterType:
 def _extract_parameters_from_signature(func: Callable) -> List[ToolParameter]:
     """Extract parameters from function signature."""
     sig = inspect.signature(func)
-    params = []
+    params =[]
     
     for name, param in sig.parameters.items():
         if name == 'self':
@@ -67,32 +67,50 @@ def _extract_trigger_phrases(docstring: str) -> List[str]:
     """Extract trigger phrases from docstring."""
     if not docstring:
         return []
-        
-    # Look for trigger phrases in the format:
-    # Trigger phrases: phrase1, phrase2, phrase3
-    # or
-    # :trigger: phrase1, phrase2, phrase3
-    trigger_match = re.search(r'(?:Trigger phrases:|:trigger:)\s*(.*?)(?:\n|$)', docstring)
+    
+    phrases = []
+    
+    # Look for multiple :trigger lines
+    trigger_lines = re.findall(r':trigger\s+(.*?)(?:\n|$)', docstring, re.IGNORECASE)
+    for line in trigger_lines:
+        phrases.extend([p.strip() for p in line.split(',') if p.strip()])
+    
+    # Look for Trigger phrases: format (comma-separated)
+    trigger_match = re.search(r'Trigger phrases:\s*(.*?)(?:\n|$)', docstring, re.IGNORECASE)
     if trigger_match:
-        phrases = [p.strip() for p in trigger_match.group(1).split(',')]
-        return [p for p in phrases if p]
-    return []
+        phrases.extend([p.strip() for p in trigger_match.group(1).split(',') if p.strip()])
+    
+    # Look for :trigger: format (comma-separated)
+    trigger_colon_match = re.search(r':trigger:\s*(.*?)(?:\n|$)', docstring, re.IGNORECASE)
+    if trigger_colon_match:
+        phrases.extend([p.strip() for p in trigger_colon_match.group(1).split(',') if p.strip()])
+    
+    return list(set(phrases))  # Remove duplicates
 
 
 def _extract_examples(docstring: str) -> List[str]:
     """Extract examples from docstring."""
     if not docstring:
         return []
-        
-    # Look for examples in the format:
-    # Examples: example1, example2, example3
-    # or
-    # :examples: example1, example2, example3
-    example_match = re.search(r'(?:Examples:|:examples:)\s*(.*?)(?:\n|$)', docstring)
+    
+    examples = []
+    
+    # Look for multiple :examples lines
+    example_lines = re.findall(r':examples\s+(.*?)(?:\n|$)', docstring, re.IGNORECASE)
+    for line in example_lines:
+        examples.extend([e.strip() for e in line.split(',') if e.strip()])
+    
+    # Look for Examples: format (comma-separated)
+    example_match = re.search(r'Examples:\s*(.*?)(?:\n|$)', docstring, re.IGNORECASE)
     if example_match:
-        examples = [e.strip() for e in example_match.group(1).split(',')]
-        return [e for e in examples if e]
-    return []
+        examples.extend([e.strip() for e in example_match.group(1).split(',') if e.strip()])
+    
+    # Look for :examples: format (comma-separated)
+    example_colon_match = re.search(r':examples:\s*(.*?)(?:\n|$)', docstring, re.IGNORECASE)
+    if example_colon_match:
+        examples.extend([e.strip() for e in example_colon_match.group(1).split(',') if e.strip()])
+    
+    return list(set(examples))  # Remove duplicates
 
 
 def tool_call(

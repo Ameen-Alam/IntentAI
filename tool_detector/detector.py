@@ -75,12 +75,33 @@ def calculate_confidence(
     return min(confidence, 1.0)
 
 
+# Synonyms for boolean parameter names (expandable by users)
+BOOLEAN_SYNONYMS = {
+    'include_history': ['history'],
+    'include_metadata': ['metadata'],
+    # Add more as needed
+}
+
+# Priority order for string parameters (for deduplication)
+STRING_PARAM_PRIORITY = ['query', 'filters', 'expression', 'city', 'symbol']
+
+def _boolean_param_matches(param_name: str, input_lower: str) -> bool:
+    """Check if any synonym or substring of the param name is present in the input."""
+    if param_name in input_lower:
+        return True
+    for syn in BOOLEAN_SYNONYMS.get(param_name, []):
+        if syn in input_lower:
+            return True
+    # Substring match
+    for word in param_name.split('_'):
+        if word and word in input_lower:
+            return True
+    return False
+
 def _extract_boolean_parameter(param: ToolParameter, full_input: str) -> Optional[bool]:
-    """Extract boolean parameters with improved pattern matching."""
     param_name_lower = param.name.lower()
     input_lower = full_input.lower()
-    
-    # Common boolean patterns
+    # Check for positive/negative patterns for param name and synonyms
     positive_patterns = [
         rf'with\s+{re.escape(param_name_lower)}',
         rf'including\s+{re.escape(param_name_lower)}',
@@ -89,7 +110,6 @@ def _extract_boolean_parameter(param: ToolParameter, full_input: str) -> Optiona
         rf'with\s+{re.escape(param_name_lower)}\s+enabled',
         rf'with\s+{re.escape(param_name_lower)}\s+on'
     ]
-    
     negative_patterns = [
         rf'without\s+{re.escape(param_name_lower)}',
         rf'no\s+{re.escape(param_name_lower)}',
@@ -97,15 +117,23 @@ def _extract_boolean_parameter(param: ToolParameter, full_input: str) -> Optiona
         rf'without\s+{re.escape(param_name_lower)}\s+enabled',
         rf'without\s+{re.escape(param_name_lower)}\s+on'
     ]
-    
+    # Add synonym patterns
+    for syn in BOOLEAN_SYNONYMS.get(param_name_lower, []):
+        positive_patterns.append(rf'with\s+{re.escape(syn)}')
+        positive_patterns.append(rf'including\s+{re.escape(syn)}')
+        negative_patterns.append(rf'without\s+{re.escape(syn)}')
+        negative_patterns.append(rf'no\s+{re.escape(syn)}')
     for pattern in positive_patterns:
         if re.search(pattern, input_lower):
             return True
-    
     for pattern in negative_patterns:
         if re.search(pattern, input_lower):
             return False
-    
+    # Fallback: if any synonym or substring is present, treat as True
+    if _boolean_param_matches(param_name_lower, input_lower):
+        if 'without' in input_lower or 'no' in input_lower or 'exclude' in input_lower:
+            return False
+        return True
     return None
 
 
@@ -210,34 +238,43 @@ def extract_parameters(
     tool: Tool,
     context: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    """Extract parameters from user input - completely generic approach."""
+    """Extract parameters from user input - improved deduplication and relevance."""
     params = {}
     input_lower = user_input.lower()
-    
-    # Find the best matching trigger phrase
     matched_trigger, trigger_score = _fuzzy_trigger_match(user_input, tool.trigger_phrases)
-    
     if matched_trigger:
-        # Extract text after the trigger phrase
         trigger_index = input_lower.find(matched_trigger.lower())
         if trigger_index != -1:
             trigger_index += len(matched_trigger)
         else:
             trigger_index = 0
-        
         remaining_text = user_input[trigger_index:].strip()
-        
-        # Extract parameters using generic logic
+        # Assign string parameters only to the most relevant one
+        string_params = [p for p in tool.parameters if p.type == ParameterType.STRING]
+        assigned_string = False
         for param in tool.parameters:
-            extracted_value = _extract_generic_parameter(param, remaining_text, user_input)
-            if extracted_value is not None:
-                params[param.name] = extracted_value
-    
+            if param.type == ParameterType.STRING:
+                # Assign only to the highest priority string param that matches input, or first in priority
+                if not assigned_string:
+                    if param.name in input_lower or any(syn in input_lower for syn in BOOLEAN_SYNONYMS.get(param.name, [])):
+                        params[param.name] = _extract_string_parameter(param, remaining_text, user_input)
+                        assigned_string = True
+                    elif param.name in STRING_PARAM_PRIORITY and not any(p in params for p in STRING_PARAM_PRIORITY):
+                        params[param.name] = _extract_string_parameter(param, remaining_text, user_input)
+                        assigned_string = True
+                # Otherwise, skip assignment to avoid duplicates
+            elif param.type == ParameterType.BOOLEAN:
+                val = _extract_boolean_parameter(param, user_input)
+                if val is not None:
+                    params[param.name] = val
+            elif param.type == ParameterType.NUMBER:
+                val = _extract_generic_parameter(param, remaining_text, user_input)
+                if val is not None:
+                    params[param.name] = val
     # Apply default values for missing parameters
     for param in tool.parameters:
         if param.name not in params and param.default is not None:
             params[param.name] = param.default
-    
     return params
 
 
@@ -247,37 +284,45 @@ def detect_tool_and_params(
     min_confidence: float = 0.6,
     context: Optional[Dict[str, Any]] = None
 ) -> Optional[DetectionResult]:
-    """Detect which tool to use and extract its parameters - completely generic."""
+    """Detect which tool to use and extract its parameters - now returns all candidates if ambiguous."""
     best_match = None
     best_confidence = 0.0
     best_params = {}
     validation_errors = []
     missing_params = []
-    
+    candidates = []
     # Find tools that match the input
     matching_tools = []
     for tool in available_tools:
         matched_trigger, trigger_score = _fuzzy_trigger_match(user_input, tool.trigger_phrases)
         if trigger_score > 0.7:
             matching_tools.append(tool)
-    
     if not matching_tools:
         return None
-    
     # Evaluate each matching tool
     for tool in matching_tools:
         params = extract_parameters(user_input, tool, context)
         confidence = calculate_confidence(tool, user_input, params)
-        
+        candidates.append((tool, params, confidence))
         if confidence > best_confidence:
             best_confidence = confidence
             best_match = (tool, params)
             best_params = params
-    
+    # If multiple candidates have similar confidence, return all
+    top_candidates = [c for c in candidates if abs(c[2] - best_confidence) < 0.1 and c[2] >= min_confidence]
+    if len(top_candidates) > 1:
+        # Return a list of DetectionResult for all top candidates
+        return [
+            DetectionResult(
+                tool=tool.name,
+                confidence=conf,
+                parameters=params,
+                validation_errors=[],
+                missing_parameters=[p.name for p in tool.parameters if p.required and p.name not in params]
+            ) for tool, params, conf in top_candidates
+        ]
     if best_match and best_confidence >= min_confidence:
         tool, params = best_match
-        
-        # Validate parameters
         for param in tool.parameters:
             if param.required and param.name not in params:
                 missing_params.append(param.name)
@@ -287,7 +332,6 @@ def detect_tool_and_params(
                     validation_errors.append(f"Parameter '{param.name}' is undefined")
                 elif not isinstance(value, (str, int, float, bool, dict, list)):
                     validation_errors.append(f"Parameter '{param.name}' has invalid type: {type(value)}")
-        
         return DetectionResult(
             tool=tool.name,
             confidence=best_confidence,
@@ -295,5 +339,4 @@ def detect_tool_and_params(
             validation_errors=validation_errors,
             missing_parameters=missing_params
         )
-    
     return None 

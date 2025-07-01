@@ -7,6 +7,7 @@ from pydantic import BaseModel, create_model
 from pydantic_core import PydanticUndefined
 
 from .types import DetectionResult, Tool, ToolParameter, ParameterType
+from .decorator import get_tools_from_functions, generate_json_schema
 
 
 def _normalize(text):

@@ -19,7 +19,7 @@ from intentai import (
     detect_tool_and_params,
     tool_call,
     get_tools_from_functions,
-    get_openapi_schema_for_tools,
+    generate_json_schema,
     DetectionResult,
 )
 
@@ -114,17 +114,17 @@ def search_web(query: str, max_results: int = 10) -> str:
 
 def main():
     """Demonstrate all features of IntentAI."""
-    print("🚀 IntentAI Comprehensive Example\n")
+    print("[START] IntentAI Comprehensive Example\n")
     
     # Register all tools
-    tools = get_tools_from_functions([
+    tools = get_tools_from_functions(
         get_weather,
         calculator,
         send_email,
         search_web
-    ])
+    )
     
-    print(f"📋 Registered {len(tools)} tools:")
+    print(f"[INFO] Registered {len(tools)} tools:")
     for tool in tools:
         print(f"  - {tool.name}: {tool.description}")
     print()
@@ -143,7 +143,7 @@ def main():
         "Look up current stock market trends"
     ]
     
-    print("🔍 Testing Tool Detection:")
+    print("[TEST] Testing Tool Detection:")
     print("=" * 50)
     
     for i, user_input in enumerate(test_inputs, 1):
@@ -153,51 +153,61 @@ def main():
         result = detect_tool_and_params(user_input, tools)
         
         if result:
-            print(f"   ✅ Detected: {result.tool}")
-            print(f"   📊 Confidence: {result.confidence:.3f}")
-            print(f"   🔧 Parameters: {result.params}")
+            # Handle both single result and list of results
+            if isinstance(result, list):
+                # Multiple candidates found
+                print(f"   [WARN] Multiple candidates detected:")
+                for i, res in enumerate(result, 1):
+                    print(f"     {i}. {res['tool']} (confidence: {res['confidence']:.3f})")
+                # Use the first result for execution
+                result = result[0]
+            else:
+                # Single result
+                print(f"   [OK] Detected: {result['tool']}")
+                print(f"   [INFO] Confidence: {result['confidence']:.3f}")
+                print(f"   [PARAM] Parameters: {result['parameters']}")
             
             # Simulate tool execution
             try:
-                if result.tool == "get_weather":
-                    city = result.params.get("city", "")
-                    country = result.params.get("country", "US")
-                    units = result.params.get("units", "celsius")
+                if result['tool'] == "get_weather":
+                    city = result['parameters'].get("city", "")
+                    country = result['parameters'].get("country", "US")
+                    units = result['parameters'].get("units", "celsius")
                     output = get_weather(city, country, units)
-                elif result.tool == "calculator":
-                    expression = result.params.get("expression", "")
-                    precision = result.params.get("precision", 2)
+                elif result['tool'] == "calculator":
+                    expression = result['parameters'].get("expression", "")
+                    precision = result['parameters'].get("precision", 2)
                     output = calculator(expression, precision)
-                elif result.tool == "send_email":
-                    to = result.params.get("to", "")
-                    subject = result.params.get("subject", "")
-                    body = result.params.get("body", "")
-                    cc = result.params.get("cc")
+                elif result['tool'] == "send_email":
+                    to = result['parameters'].get("to", "")
+                    subject = result['parameters'].get("subject", "")
+                    body = result['parameters'].get("body", "")
+                    cc = result['parameters'].get("cc")
                     output = send_email(to, subject, body, cc)
-                elif result.tool == "search_web":
-                    query = result.params.get("query", "")
-                    max_results = result.params.get("max_results", 10)
+                elif result['tool'] == "search_web":
+                    query = result['parameters'].get("query", "")
+                    max_results = result['parameters'].get("max_results", 10)
                     output = search_web(query, max_results)
                 else:
                     output = "Tool not implemented"
                 
-                print(f"   📤 Output: {output}")
+                print(f"   [OUTPUT] Output: {output}")
             except Exception as e:
-                print(f"   ❌ Error: {e}")
+                print(f"   [ERROR] Error: {e}")
         else:
-            print("   ❌ No tool detected")
+            print("   [FAIL] No tool detected")
     
     # Example 4: Generate JSON Schema
     print("\n" + "=" * 50)
-    print("📋 Generated JSON Schema:")
+    print("[INFO] Generated JSON Schema:")
     print("=" * 50)
     
-    schema = get_openapi_schema_for_tools(tools)
+    schema = generate_json_schema(tools)
     print(json.dumps(schema, indent=2))
     
     # Example 5: CLI simulation
     print("\n" + "=" * 50)
-    print("💻 CLI Simulation:")
+    print("[CLI] CLI Simulation:")
     print("=" * 50)
     
     cli_inputs = [
@@ -212,9 +222,9 @@ def main():
         
         if result:
             output = {
-                "tool": result.tool,
-                "params": result.params,
-                "confidence": round(result.confidence, 3)
+                "tool": result['tool'],
+                "params": result['parameters'],
+                "confidence": round(result['confidence'], 3)
             }
             print(json.dumps(output, indent=2))
         else:
@@ -222,7 +232,7 @@ def main():
     
     # Example 6: Confidence threshold demonstration
     print("\n" + "=" * 50)
-    print("🎯 Confidence Threshold Examples:")
+    print("[TEST] Confidence Threshold Examples:")
     print("=" * 50)
     
     threshold_tests = [
@@ -237,12 +247,14 @@ def main():
         print(f"\nInput: '{user_input}'")
         print(f"Threshold: {threshold}")
         
-        if result and result.confidence >= threshold:
-            print(f"✅ PASS: {result.tool} (confidence: {result.confidence:.3f})")
+        if result and result['confidence'] >= threshold:
+            print(f"[OK] PASS: {result['tool']} (confidence: {result['confidence']:.3f})")
         elif result:
-            print(f"❌ BELOW THRESHOLD: {result.tool} (confidence: {result.confidence:.3f})")
+            print(f"[FAIL] BELOW THRESHOLD: {result['tool']} (confidence: {result['confidence']:.3f})")
         else:
-            print("❌ NO DETECTION")
+            print("[FAIL] NO DETECTION")
+
+    print("[DONE] Demo completed! IntentAI successfully detected tools and extracted")
 
 
 if __name__ == "__main__":

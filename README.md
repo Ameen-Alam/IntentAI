@@ -1,4 +1,4 @@
-# IntentAI
+# IntentAI - Dynamic Tool Detection and Parameter Extraction
 
 [![PyPI version](https://badge.fury.io/py/intentai.svg)](https://badge.fury.io/py/intentai)
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)

@@ -4,20 +4,30 @@ build-backend = "hatchling.build"
 
 [project]
 name = "intentai"
-version = "0.1.0"
-description = "AI-powered intent parsing system that converts natural language into structured tool calls"
+dynamic = ["version"]
+description = "Dynamic tool detection and parameter extraction system that converts natural language into structured tool calls"
 readme = "README.md"
-requires-python = ">=3.8"
 license = {text = "MIT"}
 authors = [
-    { name = "Ameen Alam", email = "ameen@doblier.io" }
+    {name = "IntentAI Team", email = "team@intentai.com"},
 ]
 maintainers = [
-    { name = "Ameen Alam", email = "ameen@doblier.io" }
+    {name = "IntentAI Team", email = "team@intentai.com"},
 ]
-keywords = ["ai", "intent-parsing", "nlp", "natural-language-processing", "tool-detection", "machine-learning"]
+keywords = [
+    "nlp",
+    "intent-detection",
+    "tool-calling",
+    "parameter-extraction",
+    "natural-language-processing",
+    "ai",
+    "machine-learning",
+    "automation",
+    "cli",
+    "api"
+]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
@@ -30,65 +40,136 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
     "Topic :: Text Processing :: Linguistic",
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Topic :: System :: Systems Administration",
+    "Topic :: Utilities",
 ]
+requires-python = ">=3.8"
 dependencies = [
-    "pydantic>=2.0.0"
+    "pydantic>=2.0.0",
+    "typing-extensions>=4.0.0",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0",
-    "pytest-cov>=4.0",
-    "black>=23.0",
-    "isort>=5.0",
-    "mypy>=1.0",
-    "flake8>=6.0",
-    "pre-commit>=3.0",
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.0.0",
+    "flake8>=6.0.0",
+    "mypy>=1.0.0",
+    "pre-commit>=3.0.0",
+    "twine>=4.0.0",
+    "build>=1.0.0",
 ]
 docs = [
-    "sphinx>=6.0",
-    "sphinx-rtd-theme>=1.0",
-    "myst-parser>=1.0",
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=1.0.0",
+    "myst-parser>=2.0.0",
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-mock>=3.0.0",
 ]
 
 [project.urls]
-Homepage = "https://github.com/ameenalam/intentai"
+Homepage = "https://github.com/your-username/intentai"
 Documentation = "https://intentai.readthedocs.io/"
-Repository = "https://github.com/ameenalam/intentai.git"
-"Bug Tracker" = "https://github.com/ameenalam/intentai/issues"
-"Changelog" = "https://github.com/ameenalam/intentai/blob/main/CHANGELOG.md"
+Repository = "https://github.com/your-username/intentai"
+"Bug Tracker" = "https://github.com/your-username/intentai/issues"
+"Source Code" = "https://github.com/your-username/intentai"
+"Download" = "https://pypi.org/project/intentai/#files"
+"Changelog" = "https://github.com/your-username/intentai/blob/main/CHANGELOG.md"
 
 [project.scripts]
 intentai = "intentai.cli:main"
 
+[project.gui-scripts]
+intentai-gui = "intentai.gui:main"
+
+[tool.hatch.version]
+path = "intentai/__init__.py"
+
 [tool.hatch.build.targets.wheel]
 packages = ["intentai"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/intentai",
+    "/examples",
+    "/docs",
+    "/tests",
+    "/README.md",
+    "/LICENSE",
+    "/CHANGELOG.md",
+    "/CONTRIBUTING.md",
+    "/MANIFEST.in",
+    "/pyproject.toml",
+]
+
 [tool.black]
 line-length = 88
-target-version = ["py38"]
+target-version = ['py38']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
 
 [tool.isort]
 profile = "black"
 multi_line_output = 3
+line_length = 88
+known_first_party = ["intentai"]
 
 [tool.mypy]
 python_version = "3.8"
-strict = true
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "pydantic.*",
+    "pydantic_core.*",
+]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-python_classes = ["Test*"]
-python_functions = ["test_*"]
-addopts = [
-    "--strict-markers",
-    "--strict-config",
-    "--cov=intentai",
-    "--cov-report=term-missing",
-    "--cov-report=html",
+minversion = "7.0"
+addopts = "-ra -q --strict-markers --strict-config"
+testpaths = [
+    "tests",
+    "examples",
+]
+python_files = [
+    "test_*.py",
+    "*_test.py",
+]
+python_classes = [
+    "Test*",
+]
+python_functions = [
+    "test_*",
 ]
 
 [tool.coverage.run]
@@ -97,6 +178,8 @@ omit = [
     "*/tests/*",
     "*/test_*",
     "*/__pycache__/*",
+    "*/venv/*",
+    "*/env/*",
 ]
 
 [tool.coverage.report]

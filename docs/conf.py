@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- Project information -----------------------------------------------------
 
 project = 'Tool Detector'
-copyright = '2024, Ameen Alam'
+copyright = '2025, Ameen Alam'
 author = 'Ameen Alam'
 
 # The full version, including alpha/beta/rc tags

@@ -1,40 +1,66 @@
-# Tool Detector Documentation
+# IntentAI Documentation
 
-Welcome to the Tool Detector documentation! This library provides a lightweight system for parsing natural language input into structured tool calls.
+Welcome to the IntentAI documentation! IntentAI is a powerful, dynamic tool detection and parameter extraction system that converts natural language into structured tool calls.
 
 ## Quick Start
 
-```python
-from tool_detector import detect_tool_and_params
+- [Installation Guide](installation.md)
+- [Quick Start Tutorial](quickstart.md)
+- [Basic Usage Examples](examples.md)
 
-# Detect calculator usage
-result = detect_tool_and_params("Calculate 5 * 13")
-print(result)
-# DetectionResult(tool='calculator', params={'expression': '5 * 13'}, confidence=0.85)
-```
+## Core Concepts
 
-## Installation
+- [Tool Detection](detection.md)
+- [Parameter Extraction](parameters.md)
+- [Confidence Scoring](confidence.md)
+- [Decorator System](decorators.md)
 
-```bash
-pip install tool-detector
-```
+## API Reference
 
-## Features
+- [Core Functions](api/core.md)
+- [Decorators](api/decorators.md)
+- [Data Models](api/models.md)
+- [CLI Reference](api/cli.md)
 
-- 🎯 **Intent Detection**: Parse natural language into structured tool calls
-- 🔧 **Decorator-based Registration**: Use `@tool_call` decorator to register functions as tools
-- 📊 **Confidence Scoring**: Get confidence scores for tool detection
-- ✅ **Parameter Validation**: Automatic parameter extraction and validation with Pydantic
-- 🎨 **Flexible Matching**: Support for multiple trigger phrases and examples
-- 📋 **Schema Generation**: Generate JSON Schema for your tools
-- 🚀 **Lightweight**: Minimal dependencies, fast performance
+## Advanced Topics
 
-## Documentation Sections
+- [Dynamic System](advanced/dynamic.md)
+- [Schema Generation](advanced/schema.md)
+- [Error Handling](advanced/errors.md)
+- [Performance Optimization](advanced/performance.md)
 
-- [Installation](installation.md)
-- [Quick Start Guide](quickstart.md)
-- [API Reference](api.md)
-- [Examples](examples.md)
-- [Advanced Usage](advanced.md)
-- [CLI Reference](cli.md)
-- [Contributing](contributing.md) 
+## Performance & Benchmarks
+
+- [Benchmark Results](benchmarks.md) - Comprehensive performance metrics and test results
+- [Performance Guide](advanced/performance.md) - Optimization strategies and best practices
+
+## Development
+
+- [Contributing Guide](../CONTRIBUTING.md)
+- [Development Setup](development.md)
+- [Testing Guide](testing.md)
+- [Release Process](release.md)
+
+## Examples
+
+- [Basic Examples](examples/basic.md)
+- [Advanced Examples](examples/advanced.md)
+- [Real-world Scenarios](examples/real-world.md)
+- [Integration Examples](examples/integration.md)
+
+## Support
+
+- [FAQ](faq.md)
+- [Troubleshooting](troubleshooting.md)
+- [Known Issues](known-issues.md)
+
+## External Links
+
+- [GitHub Repository](https://github.com/your-username/intentai)
+- [PyPI Package](https://pypi.org/project/intentai/)
+- [Issue Tracker](https://github.com/your-username/intentai/issues)
+- [Discussions](https://github.com/your-username/intentai/discussions)
+
+---
+
+**IntentAI** - Making tool calling intelligent and dynamic! 🚀 

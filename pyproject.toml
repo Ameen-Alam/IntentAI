@@ -3,14 +3,33 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tool-detector"
+name = "intentai"
 version = "0.1.0"
-description = "A lightweight tool detection system for parsing user intents into structured tool calls"
+description = "AI-powered intent parsing system that converts natural language into structured tool calls"
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
+license = {text = "MIT"}
 authors = [
     { name = "Ameen Alam", email = "ameen@doblier.io" }
+]
+maintainers = [
+    { name = "Ameen Alam", email = "ameen@doblier.io" }
+]
+keywords = ["ai", "intent-parsing", "nlp", "natural-language-processing", "tool-detection", "machine-learning"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Linguistic",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
     "pydantic>=2.0.0"
@@ -19,10 +38,31 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0",
+    "pytest-cov>=4.0",
     "black>=23.0",
     "isort>=5.0",
     "mypy>=1.0",
+    "flake8>=6.0",
+    "pre-commit>=3.0",
 ]
+docs = [
+    "sphinx>=6.0",
+    "sphinx-rtd-theme>=1.0",
+    "myst-parser>=1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/ameenalam/intentai"
+Documentation = "https://intentai.readthedocs.io/"
+Repository = "https://github.com/ameenalam/intentai.git"
+"Bug Tracker" = "https://github.com/ameenalam/intentai/issues"
+"Changelog" = "https://github.com/ameenalam/intentai/blob/main/CHANGELOG.md"
+
+[project.scripts]
+intentai = "intentai.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["intentai"]
 
 [tool.black]
 line-length = 88
@@ -36,4 +76,39 @@ multi_line_output = 3
 python_version = "3.8"
 strict = true
 warn_return_any = true
-warn_unused_configs = true 
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--cov=intentai",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+]
+
+[tool.coverage.run]
+source = ["intentai"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+] 

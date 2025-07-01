@@ -1,4 +1,4 @@
-"""Tool Detector - A lightweight system for parsing user intents into structured tool calls."""
+"""IntentAI - AI-powered intent parsing system that converts natural language into structured tool calls."""
 
 from .detector import detect_tool_and_params
 from .types import Tool, ToolParameter, ParameterType, DetectionResult

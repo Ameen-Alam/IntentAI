@@ -1,173 +1,249 @@
+#!/usr/bin/env python3
 """
-Comprehensive example demonstrating all features of the tool-detector library.
+Comprehensive example demonstrating all features of Tool Detector.
+
+This example shows:
+- Basic tool detection
+- Decorator-based tool registration
+- Parameter validation with Pydantic
+- Schema generation
+- CLI usage simulation
 """
 
-from typing import Optional
-from pydantic import BaseModel
-from tool_detector import (
+import json
+from typing import List, Optional
+
+from pydantic import BaseModel, Field
+
+from intentai import (
+    detect_tool_and_params,
     tool_call,
     get_tools_from_functions,
-    detect_tool_and_params,
-    get_openapi_schema_for_tools
+    get_openapi_schema_for_tools,
+    DetectionResult,
 )
-import json
 
-# 1. Basic tool with docstring
-@tool_call
-def calculate(expression: str) -> float:
-    """
-    Calculate the result of a mathematical expression.
 
-    :param expression: The mathematical expression to evaluate
-    :trigger calculate
-    :trigger what is
-    :trigger compute
-    :trigger solve
-    :examples:
-    Calculate 5 * 13
-    What is 20 + 7?
-    """
-    return eval(expression)
-
-# 2. Tool with Pydantic model
+# Example 1: Basic Pydantic models for parameter validation
 class WeatherParams(BaseModel):
-    """Parameters for weather lookup."""
-    city: str
-    units: str = "celsius"
+    city: str = Field(..., description="City name to get weather for")
+    country: str = Field(default="US", description="Country code")
+    units: str = Field(default="celsius", description="Temperature units")
 
-@tool_call
-def get_weather(params: WeatherParams) -> str:
-    """
-    Get weather information for a city.
 
-    :param params: Weather parameters including city and units
-    :trigger weather in
-    :trigger temperature in
-    :trigger forecast for
-    :trigger weather forecast
-    :examples:
-    Weather in London
-    Temperature in New York in fahrenheit
-    """
-    return f"Weather in {params.city}: 72°{params.units[0].upper()}"
+class CalculatorParams(BaseModel):
+    expression: str = Field(..., description="Mathematical expression to evaluate")
+    precision: int = Field(default=2, ge=0, le=10, description="Decimal precision")
 
-# 3. Tool without docstring (demonstrates fallback)
-@tool_call
-def lookup_stock(symbol: str, include_history: bool = False) -> str:
-    """Look up stock information.
-    
-    Trigger phrases: stock price of, get quote for, price of, stock quote
-    Examples: Stock price of MSFT, Get quote for AAPL with history
-    """
-    return f"Stock {symbol}: $150.00"
 
-# 4. Tool with complex parameters
-class SearchParams(BaseModel):
-    """Parameters for document search."""
-    query: str
-    max_results: int = 10
-    include_metadata: bool = False
-    filters: dict = {}
+class EmailParams(BaseModel):
+    to: str = Field(..., description="Recipient email address")
+    subject: str = Field(..., description="Email subject")
+    body: str = Field(..., description="Email body content")
+    cc: Optional[List[str]] = Field(default=None, description="CC recipients")
 
-@tool_call
-def search_documents(params: SearchParams) -> str:
-    """Search for documents.
-    
-    Trigger phrases: search for, find documents, look for, search documents
-    Examples: Search for "python programming", Find documents about "machine learning" with metadata
-    """
-    return f"Found {params.max_results} documents matching '{params.query}'"
+
+# Example 2: Decorator-based tool registration
+@tool_call(
+    name="get_weather",
+    description="Get current weather information for a city",
+    trigger_phrases=["weather in", "weather for", "temperature in", "what's the weather"],
+    examples=[
+        "weather in New York",
+        "what's the temperature in London?",
+        "weather for Tokyo",
+        "how's the weather in Paris"
+    ]
+)
+def get_weather(city: str, country: str = "US", units: str = "celsius") -> str:
+    """Get weather information for a city."""
+    return f"Weather in {city}, {country}: Sunny, 25°{units[0].upper()}"
+
+
+@tool_call(
+    name="calculator",
+    description="Evaluate mathematical expressions",
+    trigger_phrases=["calculate", "compute", "what is", "solve"],
+    examples=[
+        "calculate 2 + 2",
+        "what is 10 * 5",
+        "compute 100 / 4",
+        "solve 15 + 27"
+    ]
+)
+def calculator(expression: str, precision: int = 2) -> float:
+    """Evaluate a mathematical expression."""
+    try:
+        result = eval(expression)
+        return round(result, precision)
+    except Exception as e:
+        raise ValueError(f"Invalid expression: {e}")
+
+
+@tool_call(
+    name="send_email",
+    description="Send an email to specified recipients",
+    trigger_phrases=["send email", "email to", "send message to"],
+    examples=[
+        "send email to john@example.com",
+        "email to alice@company.com about meeting",
+        "send message to team@project.com"
+    ]
+)
+def send_email(to: str, subject: str, body: str, cc: Optional[List[str]] = None) -> str:
+    """Send an email to the specified recipient."""
+    cc_str = f", CC: {', '.join(cc)}" if cc else ""
+    return f"Email sent to {to}{cc_str} with subject: {subject}"
+
+
+@tool_call(
+    name="search_web",
+    description="Search the web for information",
+    trigger_phrases=["search for", "find", "look up", "search web"],
+    examples=[
+        "search for Python tutorials",
+        "find information about machine learning",
+        "look up current events",
+        "search web for best practices"
+    ]
+)
+def search_web(query: str, max_results: int = 10) -> str:
+    """Search the web for the given query."""
+    return f"Found {max_results} results for: {query}"
+
 
 def main():
+    """Demonstrate all features of IntentAI."""
+    print("🚀 IntentAI Comprehensive Example\n")
+    
     # Register all tools
-    tools = get_tools_from_functions(
-        calculate,
+    tools = get_tools_from_functions([
         get_weather,
-        lookup_stock,
-        search_documents
-    )
-
-    # Print registered tools
-    print("\nRegistered Tools:")
-    print("================")
+        calculator,
+        send_email,
+        search_web
+    ])
+    
+    print(f"📋 Registered {len(tools)} tools:")
     for tool in tools:
-        print(f"\nTool: {tool.name}")
-        print(f"Description: {tool.description}")
-        print(f"Trigger phrases: {tool.trigger_phrases}")
-        print(f"Parameters: {[p.name for p in tool.parameters]}")
-        print(f"Examples: {tool.examples}")
-
-    # Test tool detection with various dynamic inputs
-    test_cases = [
-        # Calculator variations
-        "Calculate 5 * 13",
-        "What is 20 + 7?",
-        "Compute 100 / 4",
-        "Solve 15 - 8",
-        "What's 3 squared?",
-        "Calculate the sum of 10 and 20",
-        
-        # Weather variations
-        "Weather in London",
-        "Temperature in New York in fahrenheit",
-        "Forecast for Tokyo",
-        "Weather forecast for Paris",
-        "What's the weather like in Berlin?",
-        "Temperature in Sydney, Australia",
-        "Weather in San Francisco in celsius",
-        
-        # Stock variations
-        "Stock price of MSFT",
-        "Get quote for AAPL with history",
-        "Price of GOOGL",
-        "Stock quote for TSLA",
-        "What's the price of AMZN?",
-        "Get stock price for NFLX with history",
-        "Price of apple stock",
-        "Stock price of microsoft",
-        
-        # Search variations
-        "Search for python programming",
-        "Find documents about machine learning with metadata",
-        "Look for AI research papers",
-        "Search documents for blockchain technology",
-        "Find information about quantum computing",
-        "Search for 'data science' tutorials",
-        
-        # Edge cases and ambiguous inputs
-        "Tell me a joke",  # Should return None
-        "What time is it?",  # Should return None
-        "Hello world",  # Should return None
-        "Price of something",  # Ambiguous - might match stock
-        "Weather something",  # Ambiguous - might match weather
-        "Calculate something",  # Ambiguous - might match calculator
+        print(f"  - {tool.name}: {tool.description}")
+    print()
+    
+    # Example 3: Test various user inputs
+    test_inputs = [
+        "What's the weather like in Tokyo?",
+        "Calculate 15 * 7 + 3",
+        "Send email to alice@company.com about the meeting tomorrow",
+        "Search for Python best practices",
+        "What is 100 divided by 4?",
+        "Weather in Paris, France",
+        "Find information about machine learning algorithms",
+        "Compute 2 to the power of 10",
+        "Email to john@example.com with subject 'Project Update'",
+        "Look up current stock market trends"
     ]
-
-    print("\nTesting Dynamic Tool Detection:")
-    print("===============================")
-    for user_input in test_cases:
-        print(f"\nUser input: {user_input!r}")
-        result = detect_tool_and_params(
-            user_input=user_input,
-            available_tools=tools,
-            min_confidence=0.6
-        )
+    
+    print("🔍 Testing Tool Detection:")
+    print("=" * 50)
+    
+    for i, user_input in enumerate(test_inputs, 1):
+        print(f"\n{i}. Input: '{user_input}'")
+        
+        # Detect tool and parameters
+        result = detect_tool_and_params(user_input, tools)
+        
         if result:
-            print(f"✅ Detected tool: {result['tool']}")
-            print(f"   Confidence: {result['confidence']:.2f}")
-            print(f"   Parameters: {result['parameters']}")
-            if result['missing_parameters']:
-                print(f"   ⚠️  Missing parameters: {result['missing_parameters']}")
-            if result['validation_errors']:
-                print(f"   ❌ Validation errors: {result['validation_errors']}")
+            print(f"   ✅ Detected: {result.tool}")
+            print(f"   📊 Confidence: {result.confidence:.3f}")
+            print(f"   🔧 Parameters: {result.params}")
+            
+            # Simulate tool execution
+            try:
+                if result.tool == "get_weather":
+                    city = result.params.get("city", "")
+                    country = result.params.get("country", "US")
+                    units = result.params.get("units", "celsius")
+                    output = get_weather(city, country, units)
+                elif result.tool == "calculator":
+                    expression = result.params.get("expression", "")
+                    precision = result.params.get("precision", 2)
+                    output = calculator(expression, precision)
+                elif result.tool == "send_email":
+                    to = result.params.get("to", "")
+                    subject = result.params.get("subject", "")
+                    body = result.params.get("body", "")
+                    cc = result.params.get("cc")
+                    output = send_email(to, subject, body, cc)
+                elif result.tool == "search_web":
+                    query = result.params.get("query", "")
+                    max_results = result.params.get("max_results", 10)
+                    output = search_web(query, max_results)
+                else:
+                    output = "Tool not implemented"
+                
+                print(f"   📤 Output: {output}")
+            except Exception as e:
+                print(f"   ❌ Error: {e}")
         else:
-            print("❌ No tool detected")
+            print("   ❌ No tool detected")
+    
+    # Example 4: Generate JSON Schema
+    print("\n" + "=" * 50)
+    print("📋 Generated JSON Schema:")
+    print("=" * 50)
+    
+    schema = get_openapi_schema_for_tools(tools)
+    print(json.dumps(schema, indent=2))
+    
+    # Example 5: CLI simulation
+    print("\n" + "=" * 50)
+    print("💻 CLI Simulation:")
+    print("=" * 50)
+    
+    cli_inputs = [
+        "weather in London",
+        "calculate 2 + 2",
+        "search for Python docs"
+    ]
+    
+    for user_input in cli_inputs:
+        print(f"\n$ intentai '{user_input}'")
+        result = detect_tool_and_params(user_input, tools)
+        
+        if result:
+            output = {
+                "tool": result.tool,
+                "params": result.params,
+                "confidence": round(result.confidence, 3)
+            }
+            print(json.dumps(output, indent=2))
+        else:
+            print("None")
+    
+    # Example 6: Confidence threshold demonstration
+    print("\n" + "=" * 50)
+    print("🎯 Confidence Threshold Examples:")
+    print("=" * 50)
+    
+    threshold_tests = [
+        ("Weather in New York", 0.8),
+        ("Calculate 5 + 3", 0.7),
+        ("Send email to test@example.com", 0.6),
+        ("Random text that doesn't match any tool", 0.5)
+    ]
+    
+    for user_input, threshold in threshold_tests:
+        result = detect_tool_and_params(user_input, tools)
+        print(f"\nInput: '{user_input}'")
+        print(f"Threshold: {threshold}")
+        
+        if result and result.confidence >= threshold:
+            print(f"✅ PASS: {result.tool} (confidence: {result.confidence:.3f})")
+        elif result:
+            print(f"❌ BELOW THRESHOLD: {result.tool} (confidence: {result.confidence:.3f})")
+        else:
+            print("❌ NO DETECTION")
 
-    # Generate and print JSON Schema
-    print("\nJSON Schema:")
-    print("===========")
-    json_schema = get_openapi_schema_for_tools(tools)
-    print(json.dumps(json_schema, indent=2))
 
 if __name__ == "__main__":
     main()

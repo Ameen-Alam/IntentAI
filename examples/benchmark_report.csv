@@ -1,0 +1,9 @@
+Input,Detected Tool,Confidence,Parameters,Expected,Pass
+Book flight to New York for 2 people business class next Monday,book_flight,1.00,"{'destination': 'to New York for 2 people business class next Monday', 'date': 'to New York for 2 people business class next Monday', 'passengers': 2.0, 'class_type': 'to New York for 2 people business class next Monday'}",book_flight,PASS
+What's the weather in Madrid for the next 3 days?,weather_forecast,1.00,"{'city': 'in Madrid for the next 3 days?', 'days': 3.0, 'units': 'in Madrid for the next 3 days?'}",weather_forecast,PASS
+Reserve flight Paris,book_flight,1.00,"{'destination': 'Paris', 'date': 'Paris', 'class_type': 'Paris', 'passengers': 1}",book_flight,PASS
+Temperature in Rome tomorrow,weather_forecast,1.00,"{'city': 'in Rome tomorrow', 'units': 'in Rome tomorrow', 'days': 1}",weather_forecast,PASS
+flight ticket Tokyo,book_flight,1.00,"{'destination': 'Tokyo', 'date': 'Tokyo', 'class_type': 'Tokyo', 'passengers': 1}",book_flight,PASS
+weather forecast,weather_forecast,1.00,"{'city': 'forecast', 'units': 'forecast', 'days': 1}",weather_forecast,PASS
+book flight,book_flight,0.68,"{'passengers': 1, 'class_type': 'economy'}",book_flight,PASS
+random gibberish input,,,,,PASS

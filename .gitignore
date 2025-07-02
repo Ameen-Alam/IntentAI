@@ -59,7 +59,7 @@ scripts/
 debug_test.py
 
 # Example and test files (not for PyPI)
-examples/
+# examples/
 tests/ 
 
 .pypirc
